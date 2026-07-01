@@ -235,18 +235,33 @@ function sugerencias() {
 
   const cashW = (D.cash || 0) / total;
   const cashObjetivo = (t.cashMin + t.cashMax) / 2;
-  let desplegable = Math.max(0, (D.cash || 0) - cashObjetivo * total);
+  const cashPuro = Math.max(0, (D.cash || 0) - cashObjetivo * total);
+  let desplegable = cashPuro;
+  let gastado = 0;
 
   /* gaps por sector, de mayor a menor */
   const gaps = Object.entries(t.sectores)
     .map(([k, cfg]) => ({ k, label: cfg.label, gap: cfg.peso - (w[k] || 0), gapUsd: (cfg.peso - (w[k] || 0)) * total }))
     .sort((a, b) => b.gapUsd - a.gapUsd);
 
-  /* COMPRAS: sectores subponderados, mientras haya cash desplegable */
+  /* capital que liberarían los recortes de sectores sobreponderados
+     (posiciones que ya cumplen la tenencia mínima) */
+  let liberable = 0;
+  for (const g of gaps) {
+    if (g.gapUsd > -40) continue;
+    const p = pos.filter((x) => x.sector === g.k).sort((a, b) => b.valor - a.valor)[0];
+    if (p && (!p.compradoEl || dias(p.compradoEl, hoy()) >= (t.minHoldingDias || 90))) liberable += -g.gapUsd;
+  }
+  desplegable += liberable;
+
+  /* COMPRAS: sectores subponderados, mientras haya capital desplegable
+     (efectivo por encima de la banda + lo que liberan los recortes) */
   for (const g of gaps) {
     if (g.gapUsd < 25 || desplegable < 25) continue;
     const monto = Math.min(g.gapUsd, desplegable);
     desplegable -= monto;
+    gastado += monto;
+    const usaRecorte = gastado > cashPuro && liberable > 0;
     const cands = (CATALOGO[g.k] || []).filter((c) => c.sym);
     const yaTiene = pos.find((p) => p.sector === g.k);
     const cand = yaTiene && cands.find((c) => c.sym === yaTiene.sym) ? yaTiene : cands[0];
@@ -255,7 +270,7 @@ function sugerencias() {
     out.push({
       prioridad: sinExp && g.gap >= 0.08 ? 'alta' : 'media',
       accion: 'COMPRAR', sym: cand?.sym || '—', monto,
-      razon: `${g.label} pesa ${fp(w[g.k] || 0)} y el objetivo del perfil ${esc(D.cliente.perfil)} es ${fp(t.sectores[g.k].peso, 0)}. ${sinExp ? 'Hoy no hay ninguna exposición a este sector, que es parte declarada de la estrategia.' : 'Completa el sector hacia su peso objetivo.'}${q?.price ? ` Precio actual de ${cand.sym}: ${fm(q.price)} → ~${(monto / q.price).toFixed(4)} unidades.` : ''}`,
+      razon: `${g.label} pesa ${fp(w[g.k] || 0)} y el objetivo del perfil ${esc(D.cliente.perfil)} es ${fp(t.sectores[g.k].peso, 0)}. ${sinExp ? 'Hoy no hay ninguna exposición a este sector, que es parte declarada de la estrategia.' : 'Completa el sector hacia su peso objetivo.'}${usaRecorte ? ' Se financia en parte con los recortes propuestos abajo.' : ''}${q?.price ? ` Precio actual de ${cand.sym}: ${fm(q.price)} → ~${(monto / q.price).toFixed(4)} unidades.` : ''}`,
     });
   }
 
