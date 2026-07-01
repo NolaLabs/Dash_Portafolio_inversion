@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Nola Labs · Tablero Portafolio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@400;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" type="image/svg+xml" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path d="M9 36 L24 12 L39 36" fill="none" stroke="%23004643" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="41.5" cy="34" r="3.4" fill="%23004643"/></svg>'>
+</head>
+<body>
+
+<!-- ============ PANTALLA DE ACCESO ============ -->
+<div id="lock" class="lock">
+  <div class="lock-card">
+    <div class="lock-head">
+      <div class="brand">
+        <svg width="34" height="34" viewBox="0 0 48 48" role="img" aria-label="Nola Labs">
+          <path d="M9 36 L24 12 L39 36" fill="none" stroke="#F0EDE5" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="41.5" cy="34" r="3.4" fill="#F0EDE5"/>
+        </svg>
+        <span class="wordmark">NOLA LABS<span class="dot">•</span></span>
+      </div>
+      <p>Tablero Portafolio · Fondo de inversión</p>
+    </div>
+    <div class="lock-body">
+      <div class="msg" id="lockMsg"></div>
+
+      <div id="lockCloud">
+        <div class="field"><label>Correo</label><input class="input" type="email" id="loginEmail" autocomplete="username"></div>
+        <div class="field"><label>Contraseña</label><input class="input" type="password" id="loginPass" autocomplete="current-password"></div>
+        <button class="btn btn-signature" style="width:100%" id="btnLoginCloud">Entrar · nube en vivo</button>
+        <div class="lock-switch">¿Sin conexión? <a id="toLocal">Entrar en modo local</a></div>
+      </div>
+
+      <div id="lockLocal" class="hidden">
+        <div class="field"><label>Clave de acceso</label><input class="input" type="password" id="localPass"></div>
+        <button class="btn btn-primary" style="width:100%" id="btnLoginLocal">Entrar · modo local</button>
+        <div class="lock-switch"><a id="toCloud">Volver al login de nube</a></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app" class="hidden">
+  <header class="top">
+    <div class="top-inner">
+      <div class="brand">
+        <svg width="30" height="30" viewBox="0 0 48 48" role="img" aria-label="Nola Labs">
+          <path d="M9 36 L24 12 L39 36" fill="none" stroke="#F0EDE5" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="41.5" cy="34" r="3.4" fill="#F0EDE5"/>
+        </svg>
+        <span class="wordmark">NOLA LABS<span class="dot">•</span></span>
+      </div>
+      <span class="top-title" id="topTitle">Portafolio · —</span>
+      <div class="top-spacer"></div>
+      <div class="top-actions">
+        <span class="cloud-state off" id="cloudState">Local</span>
+        <button class="btn btn-signature btn-sm" id="btnQuotes">Actualizar precios</button>
+      </div>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <div class="tabs-inner" id="tabs">
+      <button class="tab active" data-pane="resumen">Resumen</button>
+      <button class="tab" data-pane="portafolio">Portafolio</button>
+      <button class="tab" data-pane="movimientos">Movimientos</button>
+      <button class="tab" data-pane="salud">Salud</button>
+      <button class="tab" data-pane="sugerencias">Sugerencias</button>
+      <button class="tab" data-pane="nube">Nube · Ajustes</button>
+    </div>
+  </nav>
+
+  <main class="wrap">
+    <section class="pane active" id="pane-resumen"></section>
+    <section class="pane" id="pane-portafolio"></section>
+    <section class="pane" id="pane-movimientos"></section>
+    <section class="pane" id="pane-salud"></section>
+    <section class="pane" id="pane-sugerencias"></section>
+    <section class="pane" id="pane-nube"></section>
+  </main>
+
+  <footer class="dark">
+    <div class="foot-inner">
+      <svg width="34" height="34" viewBox="0 0 48 48"><path d="M9 36 L24 12 L39 36" fill="none" stroke="#F0EDE5" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="41.5" cy="34" r="3.4" fill="#F0EDE5"/></svg>
+      <p class="tag">Ejecutar, no presentar.</p>
+      <p class="legal">Herramienta interna de gestión. No constituye asesoría financiera regulada.</p>
+    </div>
+  </footer>
+</div>
+
+<div id="toast"></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
