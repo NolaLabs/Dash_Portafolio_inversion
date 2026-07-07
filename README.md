@@ -12,7 +12,8 @@ Clave de acceso en modo local: **`Nola$2026`** · En la nube: tu correo + contra
 - **Portafolio** — posiciones con costo, precio (en vivo o manual), P&L y peso. Efectivo editable.
 - **Movimientos** — historial completo de compras, ventas, depósitos y dividendos. Registrar un movimiento actualiza posiciones, costo promedio y efectivo automáticamente.
 - **Salud** — scoring 0–100 en 6 dimensiones ponderadas: cobertura de sectores objetivo, diversificación (HHI), alineación con el perfil, disciplina de rotación, despliegue de capital y desempeño vs. mercado.
-- **Sugerencias** — órdenes propuestas (comprar / recortar / vigilar / reglas) generadas a partir del perfil de riesgo, la asignación objetivo, la banda de efectivo y la tenencia mínima. Con montos concretos en USD.
+- **Sugerencias** — dos motores: (1) **recomendación semanal generada por Claude** (Opus 4.8) con el estado completo del portafolio, respetando perfil de riesgo, fees del broker, tenencia mínima y banda de efectivo — se genera sola cada lunes 7:00 am (Bogotá) vía pg_cron o bajo demanda con un botón; (2) reglas en vivo (comprar / recortar / vigilar) con montos concretos en USD, conscientes del fee por orden y del ticket mínimo.
+- **Fees del broker (Hapi)** — cada movimiento registra su fee ($0.15/orden + ~$0.02 regulatorio en ventas); se descuenta de la caja, engrosa el costo de compra y el tablero acumula el total pagado.
 - **Nube · Ajustes** — estado de conexión, snapshot del día, export/import JSON.
 
 El código trae una **plantilla genérica**; los datos reales del cliente viven en la nube (Supabase, tabla `portafolios` con RLS) y se cargan al iniciar sesión.
@@ -43,7 +44,9 @@ Luego en GitHub: **Settings → Pages → Source: Deploy from a branch → main 
 
 - **Proyecto Supabase:** `baqevhsyawugvekqbwsm` (us-east-1) — el mismo del Tablero Financiero.
 - **Tabla:** `portafolios` (una fila jsonb por usuario, RLS + realtime). SQL de referencia en `supabase-setup.sql`.
-- **Edge Function:** `quotes` — proxy de precios de Yahoo Finance con CORS abierto y JWT requerido.
+- **Edge Function `quotes`** — proxy de precios de Yahoo Finance con CORS abierto y JWT requerido.
+- **Edge Function `reco`** — `?mode=snapshot` actualiza precios y snapshot del día; `?mode=reco` además genera la recomendación semanal llamando al API de Claude (`claude-opus-4-8`, salida JSON estructurada). Requiere el secreto `ANTHROPIC_API_KEY` (Dashboard → Edge Functions → Secrets).
+- **pg_cron:** `portafolio-precios-diario` (L–V 21:15 UTC, tras el cierre de NYSE) y `portafolio-reco-semanal` (lunes 12:00 UTC = 7:00 am Bogotá).
 
 ---
 

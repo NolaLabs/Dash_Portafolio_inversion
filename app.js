@@ -39,6 +39,7 @@ const PLANTILLA = {
   },
   targets: {
     cashMin: 0.05, cashMax: 0.12, maxPosicion: 0.25, minHoldingDias: 90,
+    fees: { porOrden: 0.15, ventaRegulatorio: 0.02, minTicket: 30 },
     sectores: {
       indice:     { label: 'Índice EEUU (core)', peso: 0.28 },
       tech:       { label: 'Tecnología', peso: 0.22 },
@@ -79,6 +80,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const hoy = () => new Date().toISOString().slice(0, 10);
 const dias = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const FEES = () => D.targets.fees || { porOrden: 0.15, ventaRegulatorio: 0.02, minTicket: 30 };
 
 function toast(msg) {
   const t = $('#toast');
@@ -255,9 +257,12 @@ function sugerencias() {
   desplegable += liberable;
 
   /* COMPRAS: sectores subponderados, mientras haya capital desplegable
-     (efectivo por encima de la banda + lo que liberan los recortes) */
+     (efectivo por encima de la banda + lo que liberan los recortes).
+     Ticket mínimo por fee del broker: una orden pequeña regala el fee. */
+  const fees = FEES();
+  const minTicket = fees.minTicket || 30;
   for (const g of gaps) {
-    if (g.gapUsd < 25 || desplegable < 25) continue;
+    if (g.gapUsd < minTicket || desplegable < minTicket) continue;
     const monto = Math.min(g.gapUsd, desplegable);
     desplegable -= monto;
     gastado += monto;
@@ -270,7 +275,7 @@ function sugerencias() {
     out.push({
       prioridad: sinExp && g.gap >= 0.08 ? 'alta' : 'media',
       accion: 'COMPRAR', sym: cand?.sym || '—', monto,
-      razon: `${g.label} pesa ${fp(w[g.k] || 0)} y el objetivo del perfil ${esc(D.cliente.perfil)} es ${fp(t.sectores[g.k].peso, 0)}. ${sinExp ? 'Hoy no hay ninguna exposición a este sector, que es parte declarada de la estrategia.' : 'Completa el sector hacia su peso objetivo.'}${usaRecorte ? ' Se financia en parte con los recortes propuestos abajo.' : ''}${q?.price ? ` Precio actual de ${cand.sym}: ${fm(q.price)} → ~${(monto / q.price).toFixed(4)} unidades.` : ''}`,
+      razon: `${g.label} pesa ${fp(w[g.k] || 0)} y el objetivo del perfil ${esc(D.cliente.perfil)} es ${fp(t.sectores[g.k].peso, 0)}. ${sinExp ? 'Hoy no hay ninguna exposición a este sector, que es parte declarada de la estrategia.' : 'Completa el sector hacia su peso objetivo.'}${usaRecorte ? ' Se financia en parte con los recortes propuestos abajo.' : ''}${q?.price ? ` Precio actual de ${cand.sym}: ${fm(q.price)} → ~${(monto / q.price).toFixed(4)} unidades.` : ''} Fee Hapi ${fm(fees.porOrden)} (${fp(fees.porOrden / monto, 2)} del ticket).`,
     });
   }
 
@@ -304,7 +309,7 @@ function sugerencias() {
   if (cortas.length) {
     out.push({
       prioridad: 'alta', accion: 'REGLA', sym: '', monto: 0,
-      razon: `En los últimos meses hubo ${cortas.length} ventas con menos de ${t.minHoldingDias} días de tenencia (${cortas.map((c) => `${c.sym} a ${c.dias}d`).join(' · ')}). Para un mandato de rentabilidad sostenible: toda compra entra con tesis escrita y fecha de revisión, y solo se vende antes por deterioro de la tesis — no por movimiento de precio.`,
+      razon: `En los últimos meses hubo ${cortas.length} ventas con menos de ${t.minHoldingDias} días de tenencia (${cortas.map((c) => `${c.sym} a ${c.dias}d`).join(' · ')}). Cada ida y vuelta además paga ~${fm((fees.porOrden * 2) + (fees.ventaRegulatorio || 0))} de fees al broker. Para un mandato de rentabilidad sostenible: toda compra entra con tesis escrita y fecha de revisión, y solo se vende antes por deterioro de la tesis — no por movimiento de precio.`,
     });
   }
 
@@ -495,6 +500,7 @@ function renderPortafolio() {
 function renderMovimientos() {
   const movs = [...(D.movimientos || [])].sort((a, b) => b.fecha.localeCompare(a.fecha));
   const tipoBadge = { compra: 'badge', venta: 'badge-warn', deposito: 'badge-pos', retiro: 'badge-neg', dividendo: 'badge-pos', interes: 'badge-pos' };
+  const feesTotal = (D.movimientos || []).reduce((s, m) => s + (m.fee || 0), 0);
   const rows = movs.map((m) => `<tr>
       <td class="num" style="text-align:left">${esc(m.fecha)}</td>
       <td><span class="badge ${tipoBadge[m.tipo] || ''}">${esc(m.tipo)}</span></td>
@@ -502,13 +508,15 @@ function renderMovimientos() {
       <td class="num">${m.qty ? m.qty.toFixed(5) : ''}</td>
       <td class="num">${m.precio ? fm(m.precio) : ''}</td>
       <td class="num ${['venta', 'deposito', 'dividendo', 'interes'].includes(m.tipo) ? 'pos' : 'neg'}">${['venta', 'deposito', 'dividendo', 'interes'].includes(m.tipo) ? '+' : '−'}${fm(m.monto)}</td>
+      <td class="num">${m.fee ? fm(m.fee) : '—'}</td>
       <td class="mini">${esc(m.nota || '')}</td>
     </tr>`).join('');
 
+  const sectorOpts = Object.entries(D.targets.sectores).map(([k, c]) => `<option value="${k}">${esc(c.label)}</option>`).join('');
   $('#pane-movimientos').innerHTML = `
     <span class="eyebrow"><span>03</span> · Movimientos</span>
     <h2>Historial y registro</h2>
-    <p class="sub">Registrar una compra o venta actualiza posición, costo y efectivo automáticamente. Los depósitos suman al capital aportado.</p>
+    <p class="sub">Registrar una compra o venta actualiza posición, costo y efectivo automáticamente — el fee del broker se descuenta de la caja. Fees pagados a Hapi hasta hoy: <b>${fm(feesTotal)}</b>.</p>
 
     <div class="card warm" style="margin-top:20px">
       <span class="eyebrow">Nuevo movimiento</span>
@@ -520,16 +528,19 @@ function renderMovimientos() {
           <option value="dividendo">Dividendo</option><option value="interes">Interés</option>
         </select></div>
         <div class="field"><label>Símbolo</label><input class="input" id="mvSym" placeholder="VOO"></div>
+        <div class="field"><label>Sector (si es nuevo)</label><select class="input" id="mvSector">${sectorOpts}</select></div>
         <div class="field"><label>Cantidad</label><input class="input" type="number" step="0.00001" id="mvQty"></div>
-        <div class="field"><label>Monto total USD</label><input class="input" type="number" step="0.01" id="mvMonto"></div>
+        <div class="field"><label>Monto USD (sin fee)</label><input class="input" type="number" step="0.01" id="mvMonto"></div>
+        <div class="field"><label>Fee broker USD</label><input class="input" type="number" step="0.01" id="mvFee" value="${FEES().porOrden.toFixed(2)}"></div>
         <div class="field"><label>Nota</label><input class="input" id="mvNota"></div>
         <div class="field"><label>&nbsp;</label><button class="btn btn-signature" id="btnAddMov">Registrar</button></div>
       </div>
+      <p class="card-note">El fee por defecto es el de Hapi (${fm(FEES().porOrden)} por orden; las ventas suman ~${fm(FEES().ventaRegulatorio || 0)} de fees regulatorios — ajústalo según el comprobante). Para depósitos y dividendos déjalo en 0.</p>
     </div>
 
     <div class="card" style="margin-top:16px">
       <div class="table-scroll"><table>
-        <thead><tr><th>Fecha</th><th>Tipo</th><th>Activo</th><th class="num">Cantidad</th><th class="num">Precio</th><th class="num">Monto</th><th>Nota</th></tr></thead>
+        <thead><tr><th>Fecha</th><th>Tipo</th><th>Activo</th><th class="num">Cantidad</th><th class="num">Precio</th><th class="num">Monto</th><th class="num">Fee</th><th>Nota</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
     </div>`;
@@ -539,24 +550,25 @@ function renderMovimientos() {
     const sym = $('#mvSym').value.trim().toUpperCase();
     const qty = parseFloat($('#mvQty').value) || 0;
     const monto = parseFloat($('#mvMonto').value) || 0;
+    const fee = parseFloat($('#mvFee').value) || 0;
     const fecha = $('#mvFecha').value || hoy();
     if (!monto) return toast('Falta el monto');
     if (['compra', 'venta'].includes(tipo) && (!sym || !qty)) return toast('Compra/venta necesita símbolo y cantidad');
 
     const precio = qty ? monto / qty : 0;
-    D.movimientos.push({ fecha, tipo, sym, qty, precio, monto, nota: $('#mvNota').value.trim() });
+    D.movimientos.push({ fecha, tipo, sym, qty, precio, monto, fee, nota: $('#mvNota').value.trim() });
 
-    if (tipo === 'deposito') { D.cash += monto; D.cliente.capitalAportado = (D.cliente.capitalAportado || 0) + monto; }
-    if (tipo === 'retiro') { D.cash -= monto; D.cliente.capitalAportado = Math.max(0, (D.cliente.capitalAportado || 0) - monto); }
-    if (tipo === 'dividendo' || tipo === 'interes') D.cash += monto;
+    if (tipo === 'deposito') { D.cash += monto - fee; D.cliente.capitalAportado = (D.cliente.capitalAportado || 0) + monto; }
+    if (tipo === 'retiro') { D.cash -= monto + fee; D.cliente.capitalAportado = Math.max(0, (D.cliente.capitalAportado || 0) - monto); }
+    if (tipo === 'dividendo' || tipo === 'interes') D.cash += monto - fee;
     if (tipo === 'compra') {
-      D.cash -= monto;
+      D.cash -= monto + fee;
       let p = D.posiciones.find((x) => x.sym === sym);
-      if (p) { p.qty += qty; p.costo += monto; }
-      else D.posiciones.push({ sym, nombre: sym, sector: 'tech', qty, costo: monto, precio, precioFecha: fecha, compradoEl: fecha });
+      if (p) { p.qty += qty; p.costo += monto + fee; }
+      else D.posiciones.push({ sym, nombre: sym, sector: $('#mvSector').value, qty, costo: monto + fee, precio, precioFecha: fecha, compradoEl: fecha });
     }
     if (tipo === 'venta') {
-      D.cash += monto;
+      D.cash += monto - fee;
       const p = D.posiciones.find((x) => x.sym === sym);
       if (p) {
         const frac = Math.min(1, qty / p.qty);
@@ -609,12 +621,65 @@ function renderSugerencias() {
       <p>${s.razon}</p>
     </article>`).join('') : '<div class="card"><p>El portafolio está alineado con el perfil y los objetivos. Nada que hacer — esa también es una decisión.</p></div>';
 
+  const r = D.recoSemanal;
+  const accionBadge = { comprar: 'badge-pos', vender: 'badge-warn', mantener: 'badge' };
+  const recoHtml = r ? `
+      <p style="font:400 15px/1.55 var(--font-body);margin:10px 0 14px">${esc(r.resumen)}</p>
+      <div class="grid">${(r.ordenes || []).map((o) => `<article class="card sug ${o.accion === 'mantener' ? 'baja' : 'media'}">
+          <div class="sug-head">
+            <span class="badge ${accionBadge[o.accion] || 'badge'}">${esc(o.accion)}</span>
+            <span class="badge">${esc(o.sym)}</span>
+            ${o.montoUsd ? `<span class="sug-monto">${fm(o.montoUsd)}</span>` : ''}
+          </div>
+          <p><b>${esc(o.nombre)}</b> — ${esc(o.razon)}</p>
+        </article>`).join('')}</div>
+      <p class="card-note" style="margin-top:12px"><b>Riesgos a vigilar:</b> ${esc(r.riesgos)}</p>`
+    : '<p class="card-note" style="margin-top:10px">Aún no hay recomendación generada. Se genera sola cada lunes a las 7:00 am, o pídela ahora con el botón.</p>';
+
   $('#pane-sugerencias').innerHTML = `
     <span class="eyebrow"><span>05</span> · Sugerencias</span>
     <h2>Órdenes propuestas</h2>
-    <p class="sub">Generadas por reglas a partir del perfil <b>${esc(D.cliente.perfil)}</b>, la asignación objetivo (tech &gt; salud &gt; financiero), la banda de efectivo y la disciplina de tenencia mínima. Se recalculan con cada cambio.</p>
-    <div class="grid" style="margin-top:20px">${cards}</div>
-    <div class="callout" style="margin-top:24px"><strong>Marco de decisión:</strong> estas sugerencias son generadas por reglas del sistema como apoyo a la gestión — la decisión final y su comunicación al cliente son tuyas. No constituyen asesoría financiera regulada.</div>`;
+    <p class="sub">Dos motores: la <b>recomendación semanal</b> generada por Claude con el estado completo del portafolio, y las <b>reglas en vivo</b> que se recalculan con cada cambio.</p>
+
+    <div class="card warm" style="margin-top:20px">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <span class="eyebrow">Recomendación semanal · IA</span>
+        ${r ? `<span class="badge">${esc(r.fecha)}</span>` : ''}
+        <div style="flex:1"></div>
+        <button class="btn btn-primary btn-sm" id="btnReco">Generar recomendación ahora</button>
+      </div>
+      ${recoHtml}
+    </div>
+
+    <span class="eyebrow" style="margin-top:28px;display:inline-flex">Reglas en vivo</span>
+    <div class="grid" style="margin-top:10px">${cards}</div>
+    <div class="callout" style="margin-top:24px"><strong>Marco de decisión:</strong> estas sugerencias son generadas por el sistema como apoyo a la gestión — la decisión final y su comunicación al cliente son tuyas. No constituyen asesoría financiera regulada.</div>`;
+
+  $('#btnReco').onclick = generarRecoAhora;
+}
+
+async function generarRecoAhora() {
+  const btn = $('#btnReco');
+  btn.disabled = true; btn.textContent = 'Generando… (~30 s)';
+  try {
+    const res = await fetch(`${CFG.url}/functions/v1/reco?mode=reco`, {
+      headers: { Authorization: `Bearer ${CFG.anon}`, apikey: CFG.anon },
+    });
+    const j = await res.json();
+    if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
+    if (modo === 'nube' && sb && uid) {
+      const fresh = await loadCloud();
+      if (fresh) D = fresh;
+    } else {
+      const reco = j.resultados?.[0]?.reco;
+      if (reco) { D.recoSemanal = reco; touch(); }
+    }
+    render();
+    toast('Recomendación semanal generada');
+  } catch (e) {
+    toast('No se pudo generar: ' + e.message);
+    render();
+  }
 }
 
 function renderNube() {
