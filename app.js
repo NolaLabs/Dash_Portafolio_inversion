@@ -402,9 +402,16 @@ function renderResumen() {
 
 function chartLinea() {
   const H = [...(D.historial || [])].sort((a, b) => a.fecha.localeCompare(b.fecha));
-  const puntos = [...H];
+  /* el historial acumula snapshots diarios (cron): la gráfica muestra un corte
+     por mes (el último de cada uno) para mantener la lectura mensual limpia */
+  const porMes = {};
+  for (const h of H) porMes[h.fecha.slice(0, 7)] = h;
+  const puntos = Object.values(porMes).sort((a, b) => a.fecha.localeCompare(b.fecha));
   const th = { fecha: hoy(), total: totalPortafolio() };
-  if (!puntos.length || puntos[puntos.length - 1].fecha < th.fecha) puntos.push(th);
+  if (!puntos.length || puntos[puntos.length - 1].fecha < th.fecha) {
+    if (puntos.length && puntos[puntos.length - 1].fecha.slice(0, 7) === th.fecha.slice(0, 7)) puntos.pop();
+    puntos.push(th);
+  }
   if (puntos.length < 2) return '<p class="card-note">Aún no hay historial suficiente.</p>';
   const W = 520, Ht = 210, padL = 46, padB = 26, padT = 12, padR = 10;
   const vals = puntos.map((p) => p.total);
