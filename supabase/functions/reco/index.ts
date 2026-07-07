@@ -34,8 +34,23 @@ const RECO_SCHEMA = {
       },
     },
     riesgos: { type: "string", description: "Riesgos a vigilar esta semana, 1-3 frases, en español." },
+    ideasNuevas: {
+      type: "array",
+      description: "1-2 instrumentos que el cliente NO tiene, para la watchlist — no son órdenes de esta semana.",
+      items: {
+        type: "object",
+        properties: {
+          sym: { type: "string" },
+          nombre: { type: "string" },
+          sector: { type: "string" },
+          tesis: { type: "string", description: "Por qué encaja en la estrategia, 1-2 frases en español." },
+        },
+        required: ["sym", "nombre", "sector", "tesis"],
+        additionalProperties: false,
+      },
+    },
   },
-  required: ["resumen", "ordenes", "riesgos"],
+  required: ["resumen", "ordenes", "riesgos", "ideasNuevas"],
   additionalProperties: false,
 };
 
@@ -100,7 +115,7 @@ async function generarReco(data: Record<string, any>): Promise<Record<string, an
     posiciones,
     movimientosRecientes: (data.movimientos as any[]).slice(-10),
     feesBroker: data.targets?.fees ?? { porOrden: 0.15, ventaRegulatorio: 0.02, minTicket: 30 },
-    candidatosPorSector: {
+    candidatosSugeridosPorSector: {
       salud: ["XLV", "VHT"], financiero: ["XLF", "VFH"], indice: ["VOO"],
       tech: ["VGT", "MSFT"], emergentes: ["VWO"], oro: ["GLD"], innovacion: ["ARKK"],
     },
@@ -116,12 +131,14 @@ async function generarReco(data: Record<string, any>): Promise<Record<string, an
       "Reglas duras que debes respetar en toda orden que propongas:",
       "1. Perfil moderado: nada de apalancamiento, opciones ni activos especulativos; máximo maxPesoPorPosicionPct en una sola posición.",
       "2. Estrategia declarada del cliente: tecnología como mayor apuesta, luego salud y sector financiero; núcleo indexado (VOO); oro solo como cobertura (~10%).",
-      "3. Prioriza cubrir sectores de la estrategia declarada que estén en 0% de exposición (revisa sectoresActualVsObjetivo): un sector declarado sin cubrir pesa más que afinar uno que ya está cerca del objetivo. Usa candidatosPorSector para proponer el instrumento.",
+      "3. Prioriza cubrir sectores de la estrategia declarada que estén en 0% de exposición (revisa sectoresActualVsObjetivo): un sector declarado sin cubrir pesa más que afinar uno que ya está cerca del objetivo.",
+      "3b. candidatosSugeridosPorSector es una guía, no una lista cerrada: puedes proponer instrumentos que el cliente NO tiene — ETFs o acciones individuales de empresas grandes y consolidadas (large cap, negocio probado) — cuando expresen mejor la tesis o aporten diversificación. Para acciones individuales en perfil moderado: máximo 10% del total del portafolio en una sola acción. El cliente valora ver ideas nuevas cada semana cuando existan con mérito real, pero nunca fuerces una orden solo por novedad.",
       "4. Tenencia mínima: no recomiendes vender posiciones con diasTenencia menor a minHoldingDias, salvo deterioro grave de tesis; la rotación corta destruyó retorno en este portafolio.",
       "5. Fees del broker (Hapi): cada orden cuesta feesBroker.porOrden USD y las ventas suman feesBroker.ventaRegulatorio; no propongas órdenes menores a feesBroker.minTicket USD.",
       "6. Banda de efectivo objetivo: entre bandaEfectivoObjetivoPct.min y .max del total; despliega el exceso gradualmente (2-3 semanas), no todo de una vez.",
       "7. Cada orden con monto concreto en USD y razón citando las cifras del contexto (peso actual vs objetivo, brechaUsd). Máximo 4 órdenes por semana — es gestión paciente, no trading.",
       "8. Responde en español. Sé concreto y honesto; si lo correcto es no hacer nada, dilo con una sola orden 'mantener'.",
+      "9. En ideasNuevas incluye siempre 1-2 instrumentos que el cliente NO tenga — acciones individuales large-cap consolidadas o ETFs — alineados con la estrategia (tech > salud > financiero) y con una tesis breve. Son material de watchlist para estudiar, no órdenes: solo pasan a órdenes en semanas futuras si encajan en el plan de despliegue. Varía las ideas entre semanas.",
     ].join("\n"),
     messages: [{
       role: "user",
@@ -133,6 +150,29 @@ async function generarReco(data: Record<string, any>): Promise<Record<string, an
   const texto = response.content.find((b: any) => b.type === "text");
   if (!texto) throw new Error("Respuesta sin contenido");
   const reco = JSON.parse((texto as any).text);
+
+  /* validar con precio en vivo los tickers propuestos que no están en el portafolio:
+     confirma que existen en el mercado y le da al gestor el precio de referencia */
+  const propios = new Set((data.posiciones as any[]).map((p) => p.sym));
+  for (const o of reco.ordenes || []) {
+    if (o.accion === "comprar" && o.sym && !propios.has(o.sym)) {
+      try {
+        const px = await quote(o.sym);
+        o.precioActualUsd = px;
+        o.razon += ` Precio en vivo: $${px.toFixed(2)} → ~${(o.montoUsd / px).toFixed(4)} unidades.`;
+      } catch (_) {
+        o.razon += " Atención: no pude validar este ticker con precio en vivo — verifica el símbolo en Hapi antes de ordenar.";
+      }
+    }
+  }
+  for (const i of reco.ideasNuevas || []) {
+    try {
+      const px = await quote(i.sym);
+      i.precioActualUsd = px;
+    } catch (_) {
+      i.tesis += " Atención: ticker sin precio en vivo — verifícalo en Hapi.";
+    }
+  }
   return { ...reco, fecha: hoy(), modelo: response.model };
 }
 

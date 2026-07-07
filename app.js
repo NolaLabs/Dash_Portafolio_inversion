@@ -377,8 +377,9 @@ function renderResumen() {
     <h2>${esc(D.cliente.nombre)}</h2>
     <p class="sub">Perfil <b>${esc(D.cliente.perfil)}</b> · ${esc(D.cliente.broker)} · cuenta ${esc(D.cliente.cuenta)} · desde ${esc(D.cliente.inicio)}. ${esc(D.cliente.objetivo)}</p>
 
-    <div class="grid cols-4">
-      <div class="card"><span class="eyebrow">Valor total</span><span class="stat-num">${fm(total)}</span><span class="stat-label">incluye ${fm(D.cash)} en efectivo</span></div>
+    <div class="grid cols-5">
+      <div class="card"><span class="eyebrow">Valor total</span><span class="stat-num">${fm(total)}</span><span class="stat-label">posiciones + efectivo, en vivo</span></div>
+      <div class="card"><span class="eyebrow">Poder de compra</span><span class="stat-num">${fm(D.cash)}</span><span class="stat-label">efectivo disponible en Hapi · ${fp(total ? (D.cash || 0) / total : 0)} del portafolio</span></div>
       <div class="card"><span class="eyebrow">P&amp;L vs. aportado</span><span class="stat-num ${pl >= 0 ? 'pos' : 'neg'}">${pl >= 0 ? '+' : ''}${fm(pl)}</span><span class="stat-label">capital aportado ${fm(cap)}</span></div>
       <div class="card"><span class="eyebrow">Retorno</span><span class="stat-num ${ret >= 0 ? 'pos' : 'neg'}">${fp(ret)}</span><span class="stat-label">S&amp;P 500 en el mismo período: ${fp(retornoBenchmark())}</span></div>
       <div class="card"><span class="eyebrow">Salud</span><span class="stat-num" style="color:${colorScore(s.score)}">${s.score}<span style="font-size:22px">/100</span></span><span class="stat-label">ver detalle en la pestaña Salud</span></div>
@@ -630,6 +631,17 @@ function renderSugerencias() {
 
   const r = D.recoSemanal;
   const accionBadge = { comprar: 'badge-pos', vender: 'badge-warn', mantener: 'badge' };
+  const ideasHtml = (r?.ideasNuevas || []).length ? `
+      <span class="eyebrow" style="margin-top:16px;display:inline-flex">Ideas nuevas · watchlist</span>
+      <div class="grid cols-2" style="margin-top:8px">${r.ideasNuevas.map((i) => `<article class="card sug baja">
+          <div class="sug-head">
+            <span class="badge">${esc(i.sym)}</span>
+            <span class="badge">${esc(i.sector)}</span>
+            ${i.precioActualUsd ? `<span class="mini" style="font-weight:700">${fm(i.precioActualUsd)} / unidad</span>` : ''}
+          </div>
+          <p><b>${esc(i.nombre)}</b> — ${esc(i.tesis)}</p>
+        </article>`).join('')}</div>
+      <p class="card-note" style="margin-top:8px">Para estudiar — no son órdenes de esta semana. Si una te convence, pasa a órdenes en el siguiente ciclo de despliegue.</p>` : '';
   const recoHtml = r ? `
       <p style="font:400 15px/1.55 var(--font-body);margin:10px 0 14px">${esc(r.resumen)}</p>
       <div class="grid">${(r.ordenes || []).map((o) => `<article class="card sug ${o.accion === 'mantener' ? 'baja' : 'media'}">
@@ -640,7 +652,8 @@ function renderSugerencias() {
           </div>
           <p><b>${esc(o.nombre)}</b> — ${esc(o.razon)}</p>
         </article>`).join('')}</div>
-      <p class="card-note" style="margin-top:12px"><b>Riesgos a vigilar:</b> ${esc(r.riesgos)}</p>`
+      <p class="card-note" style="margin-top:12px"><b>Riesgos a vigilar:</b> ${esc(r.riesgos)}</p>
+      ${ideasHtml}`
     : '<p class="card-note" style="margin-top:10px">Aún no hay recomendación generada. Se genera sola cada lunes a las 7:00 am, o pídela ahora con el botón.</p>';
 
   $('#pane-sugerencias').innerHTML = `

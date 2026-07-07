@@ -100,9 +100,11 @@ h2{ font:700 34px/1.1 var(--font-display); color:var(--cyprus); margin:8px 0 4px
 
 /* ---------- grid de cards ---------- */
 .grid{ display:grid; gap:var(--sp-4); margin-top:var(--sp-5); }
+.grid.cols-5{ grid-template-columns:repeat(5,1fr); }
 .grid.cols-4{ grid-template-columns:repeat(4,1fr); }
 .grid.cols-3{ grid-template-columns:repeat(3,1fr); }
 .grid.cols-2{ grid-template-columns:repeat(2,1fr); }
+@media (max-width:1080px){ .grid.cols-5{ grid-template-columns:repeat(2,1fr);} }
 @media (max-width:900px){ .grid.cols-4{ grid-template-columns:repeat(2,1fr);} .grid.cols-3{ grid-template-columns:1fr;} .grid.cols-2{ grid-template-columns:1fr;} }
 
 .card{ background:var(--surface); border:var(--border); border-radius:var(--radius);
