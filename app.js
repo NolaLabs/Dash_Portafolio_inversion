@@ -659,8 +659,8 @@ function renderSugerencias() {
 }
 
 async function generarRecoAhora() {
-  const btn = $('#btnReco');
-  btn.disabled = true; btn.textContent = 'Generando… (~30 s)';
+  const btns = [$('#btnReco'), $('#btnRecoTop')].filter(Boolean);
+  btns.forEach((b) => { b.disabled = true; b.dataset.label = b.textContent; b.textContent = 'Generando… (~30 s)'; });
   try {
     const res = await fetch(`${CFG.url}/functions/v1/reco?mode=reco`, {
       headers: { Authorization: `Bearer ${CFG.anon}`, apikey: CFG.anon },
@@ -675,11 +675,22 @@ async function generarRecoAhora() {
       if (reco) { D.recoSemanal = reco; touch(); }
     }
     render();
+    irAPane('sugerencias');
     toast('Recomendación semanal generada');
   } catch (e) {
     toast('No se pudo generar: ' + e.message);
     render();
+  } finally {
+    /* #btnReco se re-crea en render(); el del header es estático y hay que restaurarlo */
+    const top = $('#btnRecoTop');
+    if (top) { top.disabled = false; top.textContent = top.dataset.label || 'Recomendación IA'; }
   }
+}
+
+function irAPane(nombre) {
+  pane = nombre;
+  document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.pane === nombre));
+  document.querySelectorAll('.pane').forEach((p) => p.classList.toggle('active', p.id === `pane-${nombre}`));
 }
 
 function renderNube() {
@@ -838,6 +849,7 @@ async function boot() {
     document.querySelectorAll('.pane').forEach((p) => p.classList.toggle('active', p.id === `pane-${pane}`));
   });
   $('#btnQuotes').onclick = actualizarPrecios;
+  $('#btnRecoTop').onclick = generarRecoAhora;
 
   $('#toLocal').onclick = () => { $('#lockCloud').classList.add('hidden'); $('#lockLocal').classList.remove('hidden'); };
   $('#toCloud').onclick = () => { $('#lockLocal').classList.add('hidden'); $('#lockCloud').classList.remove('hidden'); };
